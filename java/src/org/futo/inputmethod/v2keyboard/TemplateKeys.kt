@@ -408,6 +408,14 @@ data class PeriodKey(
 
 val TemplatePeriodKey = PeriodKey()
 
+val TemplateCommaKey = BaseKey(
+    spec = ",",
+    moreKeys = listOf("!noPanelAutoMoreKey!", "!icon/action_settings|!code/action_settings"),
+    attributes = KeyAttributes(
+        longPressEnabled = true
+    )
+)
+
 val TemplateKeys = mapOf(
     "shift" to TemplateShiftKey,
     "delete" to TemplateDeleteKey,
@@ -425,6 +433,7 @@ val TemplateKeys = mapOf(
     "alt1" to TemplateAlt1Key,
     "alt2" to TemplateAlt2Key,
     "period" to TemplatePeriodKey,
+    "comma" to TemplateCommaKey,
 
     "currency1" to TemplateCurrencyKey("£"),
     "currency2" to TemplateCurrencyKey("¢"),

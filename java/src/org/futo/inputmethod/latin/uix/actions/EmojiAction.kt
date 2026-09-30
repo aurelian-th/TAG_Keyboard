@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,16 +48,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.toArgb
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import org.futo.inputmethod.latin.uix.actions.emoji.EmojiKitchenCombination
+import org.futo.inputmethod.latin.uix.actions.emoji.EmojiKitchenDatabase
+import org.futo.inputmethod.latin.uix.actions.emoji.EmojiKitchenStickerManager
+import org.futo.inputmethod.latin.uix.EMOJI_KITCHEN_ENABLED
+import org.futo.inputmethod.latin.uix.EMOJI_KITCHEN_ONLY_SUPPORTED_APPS
+import org.futo.inputmethod.latin.uix.EMOJI_KITCHEN_REQUIRE_TAP
+import org.futo.inputmethod.latin.uix.EMOJI_KITCHEN_ONLY_MASHUPS
+import org.futo.inputmethod.latin.uix.getSettingBlocking
+import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
+import org.futo.inputmethod.latin.uix.settings.userSettingToggleDataStore
+import org.futo.inputmethod.latin.uix.settings.SettingsActivity
+import java.io.File
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -765,6 +785,237 @@ private fun LettersKey(onExit: () -> Unit) {
     }
 }
 
+val EmojiKitchenMenu = UserSettingsMenu(
+    title = R.string.emoji_kitchen_settings_title,
+    navPath = "actions/emoji",
+    registerNavPath = true,
+    settings = listOf(
+        userSettingToggleDataStore(
+            title = R.string.emoji_kitchen_settings_enabled,
+            subtitle = R.string.emoji_kitchen_settings_enabled_subtitle,
+            setting = EMOJI_KITCHEN_ENABLED
+        ),
+        userSettingToggleDataStore(
+            title = R.string.emoji_kitchen_settings_only_supported_apps,
+            subtitle = R.string.emoji_kitchen_settings_only_supported_apps_subtitle,
+            setting = EMOJI_KITCHEN_ONLY_SUPPORTED_APPS
+        ),
+        userSettingToggleDataStore(
+            title = R.string.emoji_kitchen_settings_require_tap,
+            subtitle = R.string.emoji_kitchen_settings_require_tap_subtitle,
+            setting = EMOJI_KITCHEN_REQUIRE_TAP
+        ),
+        userSettingToggleDataStore(
+            title = R.string.emoji_kitchen_settings_only_mashups,
+            subtitle = R.string.emoji_kitchen_settings_only_mashups_subtitle,
+            setting = EMOJI_KITCHEN_ONLY_MASHUPS
+        )
+    )
+)
+
+private fun isEmojiCodePoint(cp: Int): Boolean {
+    val type = Character.getType(cp)
+    return type == Character.SURROGATE.toInt() ||
+           type == Character.OTHER_SYMBOL.toInt() ||
+           (cp in 0x1F300..0x1FAFF) ||
+           (cp in 0x2600..0x27BF) ||
+           (cp in 0x2300..0x23FF) ||
+           (cp in 0x2B50..0x2B55)
+}
+
+private fun extractTrailingEmojis(text: CharSequence?): List<String> {
+    if (text.isNullOrEmpty()) return emptyList()
+    var end = text.length
+    while (end > 0 && text[end - 1].isWhitespace()) {
+        end--
+    }
+    if (end == 0) return emptyList()
+
+    val emojis = mutableListOf<String>()
+    var i = end
+    while (i > 0 && emojis.size < 2) {
+        val cp = Character.codePointBefore(text, i)
+        val charCount = Character.charCount(cp)
+        val prevIdx = i - charCount
+
+        val isEmoji = isEmojiCodePoint(cp) || (cp == 0xFE0F) || (cp == 0x200D)
+        if (!isEmoji) {
+            if (Character.isWhitespace(cp) && emojis.isNotEmpty()) {
+                i = prevIdx
+                continue
+            }
+            break
+        }
+
+        var glyphStart = prevIdx
+        while (glyphStart > 0) {
+            val prevCp = Character.codePointBefore(text, glyphStart)
+            if (prevCp == 0x200D || prevCp == 0xFE0F || (prevCp in 0x1F3FB..0x1F3FF)) {
+                glyphStart -= Character.charCount(prevCp)
+                if (glyphStart > 0) {
+                    val baseCp = Character.codePointBefore(text, glyphStart)
+                    glyphStart -= Character.charCount(baseCp)
+                }
+            } else {
+                break
+            }
+        }
+
+        val emojiStr = text.substring(glyphStart, i).trim()
+        if (emojiStr.isNotEmpty()) {
+            emojis.add(0, emojiStr)
+        }
+        i = glyphStart
+    }
+    return emojis
+}
+
+@Composable
+fun EmojiKitchenStickerItem(
+    combination: EmojiKitchenCombination,
+    onClick: (File) -> Unit,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 48.dp
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var bitmap by remember(combination.imageUrl) {
+        mutableStateOf<ImageBitmap?>(
+            EmojiKitchenStickerManager.getCachedBitmap(combination.imageUrl)?.asImageBitmap()
+        )
+    }
+    var isLoading by remember(combination.imageUrl) { mutableStateOf(bitmap == null) }
+
+    LaunchedEffect(combination.imageUrl) {
+        if (bitmap == null) {
+            withContext(Dispatchers.IO) {
+                val bmp = EmojiKitchenStickerManager.loadBitmap(context, combination)
+                withContext(Dispatchers.Main) {
+                    bitmap = bmp?.asImageBitmap()
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+                scope.launch {
+                    val file = EmojiKitchenStickerManager.getOrDownloadSticker(context, combination)
+                    if (file != null) {
+                        onClick(file)
+                    }
+                }
+            }
+            .padding(2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!,
+                contentDescription = "${combination.leftEmoji} + ${combination.rightEmoji}",
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(size * 0.4f),
+                strokeWidth = 2.dp,
+                color = LocalKeyboardScheme.current.onKeyboardContainer.copy(alpha = 0.5f)
+            )
+        } else {
+            Text(combination.rightEmoji, fontSize = (size.value * 0.45f).sp)
+        }
+    }
+}
+
+@Composable
+fun EmojiKitchenStickerRow(
+    featuredCombination: EmojiKitchenCombination?,
+    relatedCombinations: List<EmojiKitchenCombination>,
+    onStickerClick: (File) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    if (featuredCombination == null && relatedCombinations.isEmpty()) return
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        // "Emoji Kitchen" header - compact, like Gboard
+        Text(
+            text = stringResource(R.string.emoji_kitchen_settings_title),
+            style = Typography.SmallMl.copy(fontSize = 11.sp),
+            color = LocalKeyboardScheme.current.onKeyboardContainer.copy(alpha = 0.55f),
+            modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 1.dp)
+        )
+
+        // Sticker strip: featured | related... | gear
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Featured mashup (larger, left side)
+            if (featuredCombination != null) {
+                EmojiKitchenStickerItem(
+                    combination = featuredCombination,
+                    onClick = onStickerClick,
+                    size = 46.dp
+                )
+
+                // Vertical divider only when related combinations exist
+                if (relatedCombinations.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .width(1.dp)
+                            .height(30.dp)
+                            .background(LocalKeyboardScheme.current.onKeyboardContainer.copy(alpha = 0.2f))
+                    )
+                }
+            }
+
+            if (relatedCombinations.isNotEmpty()) {
+                // Related mashups scrollable row
+                LazyRow(
+                    modifier = Modifier
+                        .weight(1.0f),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(relatedCombinations, key = { it.imageUrl }) { combo ->
+                        EmojiKitchenStickerItem(
+                            combination = combo,
+                            onClick = onStickerClick,
+                            size = 42.dp
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1.0f))
+            }
+
+            // Settings gear
+            IconButton(
+                onClick = {
+                    SettingsActivity.openToNavDest(context, "actions/emoji")
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.settings),
+                    contentDescription = stringResource(R.string.emoji_kitchen_settings_title),
+                    tint = LocalKeyboardScheme.current.onKeyboardContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun EmojiGrid(
     onClick: (EmojiItem) -> Unit,
@@ -775,9 +1026,22 @@ fun EmojiGrid(
     keyboardShown: Boolean,
     emojiMap: Map<String, EmojiItem>,
     isSearching: Boolean,
-    searchFilter: String
+    searchFilter: String,
+    onStickerClick: ((File) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val kitchenEnabled = useDataStoreValue(EMOJI_KITCHEN_ENABLED)
+    val onlySupportedApps = useDataStoreValue(EMOJI_KITCHEN_ONLY_SUPPORTED_APPS)
+    val requireTap = useDataStoreValue(EMOJI_KITCHEN_REQUIRE_TAP)
+    val onlyMashups = useDataStoreValue(EMOJI_KITCHEN_ONLY_MASHUPS)
+    val manager = LocalManager.current
+
+    val appSupportsImages = manager?.appSupportsImageInsertion("image/*", true) ?: true
+    val isKitchenActive = kitchenEnabled && (!onlySupportedApps || appSupportsImages)
+
+    var lastTappedEmojis by remember { mutableStateOf<List<String>>(emptyList()) }
+    var featuredCombo by remember { mutableStateOf<EmojiKitchenCombination?>(null) }
+    var relatedCombos by remember { mutableStateOf<List<EmojiKitchenCombination>>(emptyList()) }
 
     val emojiCategoryMap = remember {
         emojis.associate { it.emoji to it.category }
@@ -786,6 +1050,75 @@ fun EmojiGrid(
     val recentEmojis = remember {
         runBlocking { context.getRecentEmojis() }.map {
             EmojiItem(it, description = "", category = emojiCategoryMap[it] ?: "", skinTones = false)
+        }
+    }
+
+    val textBefore = manager?.getTextBeforeCursor(16)
+    val trailingFromText = remember(textBefore) { extractTrailingEmojis(textBefore) }
+    val activeKitchenEmojis = remember(lastTappedEmojis, trailingFromText, requireTap) {
+        if (lastTappedEmojis.isNotEmpty()) {
+            lastTappedEmojis
+        } else if (requireTap) {
+            emptyList()
+        } else if (trailingFromText.isNotEmpty()) {
+            trailingFromText
+        } else {
+            listOfNotNull(recentEmojis.firstOrNull()?.emoji)
+        }
+    }
+
+    LaunchedEffect(activeKitchenEmojis, isKitchenActive, onlyMashups) {
+        if (!isKitchenActive || activeKitchenEmojis.isEmpty()) {
+            featuredCombo = null
+            relatedCombos = emptyList()
+            return@LaunchedEffect
+        }
+
+        withContext(Dispatchers.IO) {
+            if (activeKitchenEmojis.size >= 2) {
+                // Two emojis active (e.g. 😘❤️)
+                val e1 = activeKitchenEmojis[activeKitchenEmojis.size - 2]
+                val e2 = activeKitchenEmojis[activeKitchenEmojis.size - 1]
+                val exact = EmojiKitchenDatabase.getExactCombination(context, e1, e2)
+
+                val feat = exact
+                val rel = if (onlyMashups) {
+                    emptyList()
+                } else {
+                    EmojiKitchenDatabase.getCombinations(
+                        context, e1, excludeUrl = exact?.imageUrl
+                    )
+                }
+
+                withContext(Dispatchers.Main) {
+                    featuredCombo = feat
+                    relatedCombos = rel
+                }
+            } else {
+                // Single emoji active
+                val e1 = activeKitchenEmojis[0]
+                val selfMashup = EmojiKitchenDatabase.getExactCombination(context, e1, e1)
+                val rel = if (onlyMashups) {
+                    emptyList()
+                } else {
+                    EmojiKitchenDatabase.getCombinations(
+                        context, e1, excludeUrl = selfMashup?.imageUrl
+                    )
+                }
+                val feat = selfMashup ?: if (!onlyMashups) rel.firstOrNull() else null
+                val remaining = if (onlyMashups) {
+                    emptyList()
+                } else if (selfMashup != null) {
+                    rel
+                } else {
+                    rel.drop(1)
+                }
+
+                withContext(Dispatchers.Main) {
+                    featuredCombo = feat
+                    relatedCombos = remaining
+                }
+            }
         }
     }
 
@@ -819,7 +1152,6 @@ fun EmojiGrid(
     }
 
     if(isSearching) {
-        val context = LocalContext.current
         val locales = LocalManager.current.let { remember { it.getActiveLocales() } }
         LaunchedEffect(locales) {
             locales.forEach { PersistentEmojiState.loadTranslationsForLanguage(context, it) }
@@ -844,6 +1176,14 @@ fun EmojiGrid(
     }
 
     Column {
+        if (isKitchenActive && (featuredCombo != null || relatedCombos.isNotEmpty()) && onStickerClick != null) {
+            EmojiKitchenStickerRow(
+                featuredCombination = featuredCombo,
+                relatedCombinations = relatedCombos,
+                onStickerClick = onStickerClick
+            )
+        }
+
         Emojis(
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
@@ -854,7 +1194,10 @@ fun EmojiGrid(
                     RoundedCornerShape(9.dp)
                 ),
             emojis = emojiList,
-            onClick = onClick,
+            onClick = {
+                lastTappedEmojis = (lastTappedEmojis + it.emoji).takeLast(2)
+                onClick(it)
+            },
             emojiMap = emojiMap,
             currentCategory = currentCategory,
             jumpCategory = jumpCategory
@@ -864,7 +1207,10 @@ fun EmojiGrid(
             EmojiNavigation(
                 showKeys = !keyboardShown,
                 onExit = onExit,
-                onBackspace = onBackspace,
+                onBackspace = {
+                    lastTappedEmojis = lastTappedEmojis.dropLast(1)
+                    onBackspace(it)
+                },
                 categories = listOf(
                     CategoryItem("Recent")
                 ) + categorizedEmojis.filterIsInstance<CategoryItem>(),
@@ -1157,6 +1503,7 @@ val EmojiAction = Action(
     name = R.string.action_emoji_title,
     canShowKeyboard = true,
     simplePressImpl = null,
+    settingsMenu = EmojiKitchenMenu,
     persistentState = { manager ->
         val state = PersistentEmojiState()
         manager.getLifecycleScope().launch {
@@ -1169,6 +1516,9 @@ val EmojiAction = Action(
         object : ActionWindow() {
             private val searchText = mutableStateOf("")
             private val searching = mutableStateOf(false)
+
+            override val heightMultiplier: Float
+                get() = if (manager.getContext().getSettingBlocking(EMOJI_KITCHEN_ENABLED)) 1.10f else 1.0f
 
             @Composable
             override fun windowName(): String {
@@ -1201,7 +1551,23 @@ val EmojiAction = Action(
                             manager.performHapticAndAudioFeedback(Constants.CODE_DELETE, view)
                         }
                     }, emojis = emojis, keyboardShown = keyboardShown, emojiMap = PersistentEmojiState.emojiMap,
-                        isSearching = searching.value, searchFilter = searchText.value)
+                        isSearching = searching.value, searchFilter = searchText.value,
+                        onStickerClick = { file ->
+                            manager.getLifecycleScope().launch {
+                                val editorInfo = manager.getEditorInfo()
+                                val (finalFile, mimeTypes) = EmojiKitchenStickerManager.prepareStickerFile(
+                                    manager.getContext(),
+                                    file,
+                                    editorInfo
+                                )
+                                val uri = EmojiKitchenStickerManager.getUriForFile(manager.getContext(), finalFile)
+                                val sent = manager.typeUri(uri, mimeTypes, true)
+                                if (sent) {
+                                    manager.performHapticAndAudioFeedback(Constants.CODE_EMOJI, view)
+                                }
+                            }
+                        }
+                    )
                 }
             }
 

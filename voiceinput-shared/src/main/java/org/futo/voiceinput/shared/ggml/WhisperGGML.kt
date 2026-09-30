@@ -11,6 +11,7 @@ val inferenceContext = newSingleThreadContext("whisper-ggml-inference")
 
 enum class DecodingMode(val value: Int) {
     Greedy(0),
+    BeamSearch2(2),
     BeamSearch5(5)
 }
 

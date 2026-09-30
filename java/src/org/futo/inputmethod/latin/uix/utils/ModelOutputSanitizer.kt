@@ -4,7 +4,8 @@ import org.futo.inputmethod.latin.RichInputMethodManager
 
 data class TextContext(
     val beforeCursor: CharSequence?,
-    val afterCursor: CharSequence?
+    val afterCursor: CharSequence?,
+    val selectedText: CharSequence? = null
 )
 
 object ModelOutputSanitizer {
@@ -40,6 +41,12 @@ object ModelOutputSanitizer {
         val locale = RichInputMethodManager.getInstance().getCurrentSubtypeLocale()
 
         var trimmed = result.trim()
+        if (trimmed.isEmpty()) return ""
+
+        // Collapse repetitive ASR loops (e.g. "heart emoji heart emoji heart emoji...")
+        trimmed = trimmed.replace("(?i)\\b([a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+(?:\\s+[a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+){0,3})(?:\\s+\\1){2,}\\b".toRegex(), "$1")
+        trimmed = trimmed.replace("(?i)\\b([a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+)(?:\\s+\\1){2,}\\b".toRegex(), "$1")
+        trimmed = trimmed.trim()
         if (trimmed.isEmpty()) return ""
 
         val before = (textContext.beforeCursor?.toString() ?: "")

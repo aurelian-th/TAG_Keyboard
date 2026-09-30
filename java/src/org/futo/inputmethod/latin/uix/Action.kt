@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.navigation.NavHostController
 import org.futo.inputmethod.engine.IMEInterface
@@ -39,6 +40,9 @@ interface ActionInputTransaction {
     val textContext: TextContext
     fun updatePartial(text: String)
     fun commit(text: String)
+    fun commitAndSelect(text: String) { commit(text) }
+    fun replaceSelection(text: String) { commit(text) }
+    fun replaceInContext(target: String, replacement: String): Boolean = false
     fun cancel()
 }
 
@@ -63,6 +67,8 @@ interface KeyboardManagerForAction {
     fun typeUri(uri: Uri, mimeTypes: List<String>, ignoreConnectionOverride: Boolean = false): Boolean
     fun appSupportsImageInsertion(schema: String, ignoreConnectionOverride: Boolean): Boolean
     fun backspace(amount: Int)
+    fun getTextBeforeCursor(n: Int = 16): CharSequence? = null
+    fun getEditorInfo(): EditorInfo? = null
 
     fun closeActionWindow()
     fun forceActionWindowAboveKeyboard(to: Boolean)
@@ -131,6 +137,12 @@ abstract class ActionWindow {
 
     open val fixedWindowHeight: Dp?
         get() = null
+
+    open val heightMultiplier: Float
+        get() = 1.0f
+
+    open val extraHeightDp: Dp
+        get() = 0.dp
 
     @Composable
     abstract fun windowName(): String

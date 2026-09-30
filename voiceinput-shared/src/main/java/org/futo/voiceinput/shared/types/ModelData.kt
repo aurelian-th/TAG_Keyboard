@@ -3,6 +3,7 @@ package org.futo.voiceinput.shared.types
 import android.content.Context
 import androidx.annotation.StringRes
 import org.futo.voiceinput.shared.ggml.WhisperGGML
+import java.io.FileOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -21,13 +22,28 @@ import java.nio.channels.FileChannel
  */
 @Throws(IOException::class)
 private fun loadMappedFile(context: Context, filePath: String): MappedByteBuffer {
-    context.assets.openFd(filePath).use { fileDescriptor ->
-        FileInputStream(fileDescriptor.fileDescriptor).use { inputStream ->
-            val fileChannel = inputStream.channel
-            val startOffset = fileDescriptor.startOffset
-            val declaredLength = fileDescriptor.declaredLength
-            return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+    try {
+        context.assets.openFd(filePath).use { fileDescriptor ->
+            FileInputStream(fileDescriptor.fileDescriptor).use { inputStream ->
+                val fileChannel = inputStream.channel
+                val startOffset = fileDescriptor.startOffset
+                val declaredLength = fileDescriptor.declaredLength
+                return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+            }
         }
+    } catch (e: Exception) {
+        // Fallback for compressed assets or OS restrictions: copy to cache and mmap
+        val cacheFile = File(context.cacheDir, "asset_model_" + filePath.replace('/', '_'))
+        if (!cacheFile.exists() || cacheFile.length() == 0L) {
+            context.assets.open(filePath).use { input ->
+                FileOutputStream(cacheFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+        val fis = FileInputStream(cacheFile)
+        val fileChannel = fis.channel
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileChannel.size())
     }
 }
 
@@ -49,7 +65,12 @@ internal class ModelBuiltInAsset(
     val ggmlFile: String
 ) : ModelLoader {
     override fun exists(context: Context): Boolean {
-        return true
+        return try {
+            context.assets.open(ggmlFile).use { true }
+        } catch (_: Exception) {
+            val cacheFile = File(context.cacheDir, "asset_model_" + ggmlFile.replace('/', '_'))
+            cacheFile.exists() && cacheFile.length() > 0L
+        }
     }
 
     override fun getRequiredDownloadList(context: Context): List<String> {
@@ -112,7 +133,7 @@ public class ModelFileFile(
     val file: File,
 ) : ModelLoader {
     override fun exists(context: Context): Boolean {
-        return file.exists()
+        return file.exists() && file.length() > 0L
     }
 
     override fun getRequiredDownloadList(context: Context): List<String> {
@@ -125,6 +146,6 @@ public class ModelFileFile(
     }
 
     override fun key(context: Context): Any {
-        return "File${file.absolutePath}"
+        return "File${file.absolutePath}_${file.lastModified()}"
     }
 }

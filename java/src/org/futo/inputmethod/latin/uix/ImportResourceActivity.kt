@@ -568,11 +568,75 @@ object ResourceHelper {
         return file
     }
 
-    fun tryFindingVoiceInputModelForLocale(context: Context, locale: Locale): ModelLoader? {
-        val file = runBlocking { findFileForKind(context, locale, FileKind.VoiceInput) }
-            ?: return BuiltInVoiceInputFallbacks[locale.language]
+    fun findAnyImportedVoiceInputModel(context: Context): ModelLoader? {
+        try {
+            val candidateDirs = listOf(
+                context.getExternalFilesDir(null),
+                context.getExternalFilesDir("models"),
+                context.filesDir
+            )
+            for (dir in candidateDirs) {
+                if (dir != null && dir.exists()) {
+                    val voiceFiles = dir.listFiles { file ->
+                        file.isFile && (file.name.startsWith("voiceinput_") || file.name.startsWith("ggml-") || file.name.endsWith(".bin")) && file.length() > 1024 * 1024
+                    }
+                    if (!voiceFiles.isNullOrEmpty()) {
+                        val best = voiceFiles.maxByOrNull { it.lastModified() }
+                        if (best != null && best.exists()) {
+                            return ModelFileFile(R.string.settings_external_model_name, best)
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("ResourceHelper", "Error finding imported voice model", t)
+        }
+        return null
+    }
 
-        return ModelFileFile(R.string.settings_external_model_name, file)
+    fun tryFindingVoiceInputModelForLocale(context: Context, locale: Locale): ModelLoader? {
+        val activeModel = context.getSetting(ACTIVE_VOICE_MODEL_FILE)
+        if (activeModel == "builtin") {
+            return BuiltInVoiceInputFallbacks[locale.language]
+                ?: BuiltInVoiceInputFallbacks["en"]
+                ?: BUILTIN_ENGLISH_MODEL
+        }
+        if (activeModel.isNotEmpty()) {
+            val candidateDirs = listOf(
+                context.getExternalFilesDir(null),
+                context.getExternalFilesDir("models"),
+                context.filesDir
+            )
+            for (dir in candidateDirs) {
+                if (dir != null) {
+                    val f = File(dir, activeModel)
+                    if (f.exists() && f.length() > 1024 * 1024) {
+                        return ModelFileFile(R.string.settings_external_model_name, f)
+                    }
+                }
+            }
+        }
+
+        val file = runBlocking { findFileForKind(context, locale, FileKind.VoiceInput) }
+            ?: runBlocking {
+                val key = context.getSetting(FileKind.VoiceInput.preferenceKeyFor(locale.language), "")
+                if (key.isNotEmpty()) {
+                    val f = File(context.getExternalFilesDir(null), key)
+                    if (f.exists()) f else null
+                } else null
+            }
+
+        if (file != null && file.exists()) {
+            return ModelFileFile(R.string.settings_external_model_name, file)
+        }
+
+        // Fall back to any imported voice model on device (multilingual Whisper models work across languages)
+        findAnyImportedVoiceInputModel(context)?.let { return it }
+
+        // Fall back to built-in models
+        return BuiltInVoiceInputFallbacks[locale.language]
+            ?: BuiltInVoiceInputFallbacks["en"]
+            ?: BUILTIN_ENGLISH_MODEL
     }
 
     fun tryOpeningCustomMainDictionaryForLocale(context: Context, locale: Locale): ReadOnlyBinaryDictionary? {

@@ -58,7 +58,9 @@ import org.futo.inputmethod.latin.uix.settings.pages.SelectLanguageScreen
 import org.futo.inputmethod.latin.uix.settings.pages.SelectLayoutsScreen
 import org.futo.inputmethod.latin.uix.settings.pages.SwipeMenu
 import org.futo.inputmethod.latin.uix.settings.pages.TypingSettingsMenu
+import org.futo.inputmethod.latin.uix.settings.pages.RamblerSettingsMenu
 import org.futo.inputmethod.latin.uix.settings.pages.VoiceInputMenu
+import org.futo.inputmethod.latin.uix.settings.pages.VoiceModelDownloadScreen
 import org.futo.inputmethod.latin.uix.settings.pages.addModelManagerNavigation
 import org.futo.inputmethod.latin.uix.settings.pages.buggyeditors.BuggyTextEditVariations
 import org.futo.inputmethod.latin.uix.settings.pages.pdict.ConfirmDeleteExtraDictFileDialog
@@ -106,6 +108,7 @@ val SettingsMenus = listOf(
     PredictiveTextMenu,
     BlacklistScreenLite,
     VoiceInputMenu,
+    RamblerSettingsMenu,
     ActionsScreen,
     HelpMenu,
     MiscMenu,
@@ -166,6 +169,8 @@ fun SettingsNavigator(
             }
             composable("advancedparams") { AdvancedParametersScreen(navController) }
             composable("actionEdit") { ActionEditorScreen(navController) }
+            composable("voiceModelsDownload") { VoiceModelDownloadScreen(navController) }
+            composable("emoji_kitchen") { UserSettingsMenuScreen(org.futo.inputmethod.latin.uix.actions.EmojiKitchenMenu) }
             SettingsMenus.forEach { menu ->
                 if(menu.registerNavPath) composable(menu.navPath) { UserSettingsMenuScreen(menu) }
             }

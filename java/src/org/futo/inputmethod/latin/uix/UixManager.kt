@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
+import androidx.core.view.inputmethod.EditorInfoCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.lifecycle.LifecycleCoroutineScope
@@ -278,6 +279,14 @@ class UixActionKeyboardManager(val uixManager: UixManager, val latinIME: LatinIM
         return latinIME.imeManager.createInputTransaction()
     }
 
+    override fun getTextBeforeCursor(n: Int): CharSequence? {
+        return latinIME.currentInputConnection?.getTextBeforeCursor(n, 0)
+    }
+
+    override fun getEditorInfo(): EditorInfo? {
+        return latinIME.getBaseInputEditorInfo() ?: latinIME.currentInputEditorInfo
+    }
+
     override fun typeText(v: String) {
         if(latinIME.isInputConnectionOverridden) {
             latinIME.getBaseInputConnection()?.commitText(v, 1)
@@ -305,13 +314,13 @@ class UixActionKeyboardManager(val uixManager: UixManager, val latinIME: LatinIM
         }
 
         val inputConnection = if(ignoreConnectionOverride) {
-            latinIME.getBaseInputConnection()
+            latinIME.getBaseInputConnection() ?: latinIME.currentInputConnection
         } else {
             latinIME.currentInputConnection
         }
 
         val editorInfo = if(ignoreConnectionOverride) {
-            latinIME.getBaseInputEditorInfo()
+            latinIME.getBaseInputEditorInfo() ?: latinIME.currentInputEditorInfo
         } else {
             latinIME.currentInputEditorInfo
         }
@@ -351,8 +360,9 @@ class UixActionKeyboardManager(val uixManager: UixManager, val latinIME: LatinIM
         val patternParts = mimeTypePattern.split('/')
         val schemaParts = schema.split('/')
         if (patternParts.size != 2 || schemaParts.size != 2) return false
-        return (patternParts[0] == schemaParts[0] &&
-                (patternParts[1] == "*" || patternParts[1] == schemaParts[1]))
+        val typeMatch = patternParts[0] == "*" || schemaParts[0] == "*" || patternParts[0] == schemaParts[0]
+        val subTypeMatch = patternParts[1] == "*" || schemaParts[1] == "*" || patternParts[1] == schemaParts[1]
+        return typeMatch && subTypeMatch
     }
 
     override fun appSupportsImageInsertion(
@@ -360,16 +370,15 @@ class UixActionKeyboardManager(val uixManager: UixManager, val latinIME: LatinIM
         ignoreConnectionOverride: Boolean
     ): Boolean {
         val editorInfo = if(ignoreConnectionOverride) {
-            latinIME.getBaseInputEditorInfo()
+            latinIME.getBaseInputEditorInfo() ?: latinIME.currentInputEditorInfo
         } else {
             latinIME.currentInputEditorInfo
-        }
+        } ?: return false
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-            editorInfo?.contentMimeTypes?.any { mimeTypeMatches(it, schema) } == true
-        } else {
-            false
-        }
+        val mimes = EditorInfoCompat.getContentMimeTypes(editorInfo) ?: (
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) editorInfo.contentMimeTypes else null
+        )
+        return mimes?.any { mimeTypeMatches(it, schema) } == true
     }
 
     override fun backspace(amount: Int) {
@@ -834,10 +843,13 @@ class UixManager(private val latinIME: LatinIME) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(with(LocalDensity.current) {
-                            currWindowActionWindow.value?.fixedWindowHeight ?: ((latinIME
+                            val baseHeight = ((latinIME
                                 .getInputViewHeight()
                                 .toFloat() / heightDiv.toFloat()).toDp() +
                                     if (actionsExpanded) ActionBarHeight else 0.dp)
+                            currWindowActionWindow.value?.fixedWindowHeight
+                                ?: ((baseHeight * (currWindowActionWindow.value?.heightMultiplier ?: 1.0f))
+                                    + (currWindowActionWindow.value?.extraHeightDp ?: 0.dp))
                         })
                         .safeKeyboardPadding()
                 ) {

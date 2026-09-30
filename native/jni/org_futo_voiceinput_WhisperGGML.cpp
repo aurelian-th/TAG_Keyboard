@@ -95,11 +95,11 @@ static jstring WhisperGGML_infer(JNIEnv *env, jobject instance, jlong handle, jf
     wparams.print_realtime = false;
     wparams.print_special = false;
     wparams.print_timestamps = false;
-    wparams.max_tokens = 256;
+    wparams.max_tokens = 64;
     wparams.n_threads = (int)num_procs;
 
     wparams.audio_ctx = std::max(160, std::min(1500, (int)ceil((double)num_samples / (double)(320.0)) + 32));
-    wparams.temperature_inc = 0.0f;
+    wparams.temperature_inc = 0.2f;
 
     // Replicates old tflite behavior
     if(decoding_mode == 0) {
@@ -111,19 +111,23 @@ static jstring WhisperGGML_infer(JNIEnv *env, jobject instance, jlong handle, jf
         wparams.greedy.best_of = decoding_mode;
     }
 
-
-    wparams.suppress_blank = false;
+    wparams.suppress_blank = true;
     wparams.suppress_non_speech_tokens = (suppress_non_speech_tokens == JNI_TRUE);
-    wparams.no_timestamps = num_samples < 16000 * 25;
+    wparams.no_timestamps = true;
+    wparams.single_segment = false;
+    wparams.translate = false;
 
-    if(allowed_languages.size() == 0) {
-        wparams.language = nullptr;
-    }else if(allowed_languages.size() == 1) {
+    // Code-switching mode: enable automatic language detection if 0 or >1 languages configured
+    if(allowed_languages.size() == 0 || allowed_languages.size() > 1) {
+        wparams.language = "auto";
+        wparams.detect_language = true;
+        if(allowed_languages.size() > 1) {
+            wparams.allowed_langs = allowed_languages.data();
+            wparams.allowed_langs_size = allowed_languages.size();
+        }
+    } else {
         wparams.language = whisper_lang_str(allowed_languages[0]);
-    }else{
-        wparams.language = nullptr;
-        wparams.allowed_langs = allowed_languages.data();
-        wparams.allowed_langs_size = allowed_languages.size();
+        wparams.detect_language = false;
     }
 
     std::string prompt_str = jstring2string(env, prompt);
@@ -221,10 +225,12 @@ static jstring WhisperGGML_infer(JNIEnv *env, jobject instance, jlong handle, jf
         //AKLOGI("Final segment [%d]: %s", i, seg.c_str());
     }
 
-    if(std::find(forbidden_languages.begin(),
+    int detected_lang = whisper_full_lang_id(state->context);
+    if(detected_lang >= 0 && std::find(forbidden_languages.begin(),
                  forbidden_languages.end(),
-                 whisper_full_lang_id(state->context)) != forbidden_languages.end()) {
-        output = "<>CANCELLED<> lang=" + std::string(whisper_lang_str(whisper_full_lang_id(state->context)));
+                 detected_lang) != forbidden_languages.end()) {
+        const char *lstr = whisper_lang_str(detected_lang);
+        output = "<>CANCELLED<> lang=" + std::string(lstr ? lstr : "");
     }
 
     if(state->cancel_flag) {

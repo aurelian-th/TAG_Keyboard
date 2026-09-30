@@ -216,80 +216,157 @@ class AudioRecognizer(
     }
 
     fun reset() {
-        recorder?.stop()
-        recorderJob?.cancel()
+        try {
+            recorder?.stop()
+        } catch (_: Throwable) { }
+        try {
+            recorderJob?.cancel()
+        } catch (_: Throwable) { }
 
-        recorder?.release()
+        try {
+            recorder?.release()
+        } catch (_: Throwable) { }
         recorder = null
 
-        modelJob?.cancel()
+        try {
+            modelJob?.cancel()
+        } catch (_: Throwable) { }
         isRecording = false
 
-        modelRunner.cancelAll()
+        try {
+            modelRunner.cancelAll()
+        } catch (_: Throwable) { }
 
-        unfocusAudio()
+        try {
+            unfocusAudio()
+        } catch (_: Throwable) { }
 
-        clearCommunicationDevice()
+        try {
+            clearCommunicationDevice()
+        } catch (_: Throwable) { }
     }
 
     fun finish() {
-        if(!isRecording) return
-        onFinishRecording()
+        try {
+            if(!isRecording) return
+            onFinishRecording()
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "finish error", t)
+            reset()
+            listener.cancelled()
+        }
     }
 
     fun cancel() {
-        reset()
-        listener.cancelled()
+        try {
+            reset()
+            listener.cancelled()
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "cancel error", t)
+        }
     }
 
     fun openPermissionSettings() {
-        val packageName = context.packageName
-        val micPermissionRequester = Intent()
-        micPermissionRequester.setClassName(context, "org.futo.inputmethod.latin.MicPermissionActivity")
-        micPermissionRequester.setFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        )
-        context.startActivity(micPermissionRequester)
+        try {
+            val micPermissionRequester = Intent()
+            micPermissionRequester.setClassName(context, "org.futo.inputmethod.latin.MicPermissionActivity")
+            micPermissionRequester.setFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+            context.startActivity(micPermissionRequester)
+        } catch (e: Throwable) {
+            Log.e("AudioRecognizer", "Failed to start MicPermissionActivity, trying system settings", e)
+            try {
+                val appSettings = Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:${context.packageName}")
+                )
+                appSettings.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(appSettings)
+            } catch (e2: Throwable) {
+                Log.e("AudioRecognizer", "Failed to open app settings", e2)
+            }
+        }
 
         cancel()
     }
 
     fun start() {
-        listener.loading()
+        try {
+            listener.loading()
 
-        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermission()
-        } else {
-            startRecording()
+            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                requestPermission()
+            } else {
+                startRecording()
+            }
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "start failed", t)
+            listener.cancelled()
         }
     }
 
     private fun requestPermission() {
-        listener.needPermission { wasGranted ->
-            if(wasGranted) {
-                startRecording()
+        try {
+            listener.needPermission { wasGranted ->
+                if(wasGranted) {
+                    startRecording()
+                } else {
+                    Log.w("AudioRecognizer", "Permission was not granted")
+                }
             }
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "requestPermission error", t)
         }
     }
 
 
-    @Throws(SecurityException::class)
+    @Throws(Exception::class)
     private fun createAudioRecorder(): AudioRecord {
-        val recorder = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            16000,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            16000 * 2 * 5
-        )
-
-        this.recorder = recorder
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+        val sampleRate = 16000
+        val channelConfig = AudioFormat.CHANNEL_IN_MONO
+        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+        val bufferSize = if (minBufferSize > 0) {
+            maxOf(minBufferSize * 2, sampleRate * 2 * 5)
+        } else {
+            sampleRate * 2 * 5
         }
 
-        return recorder
+        // Try VOICE_RECOGNITION first, then fallback to MIC, then DEFAULT
+        val sources = intArrayOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.DEFAULT
+        )
+
+        var lastException: Throwable? = null
+        for (source in sources) {
+            try {
+                val rec = AudioRecord(
+                    source,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize
+                )
+                if (rec.state == AudioRecord.STATE_INITIALIZED) {
+                    this.recorder = rec
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        try {
+                            rec.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+                        } catch (_: Throwable) { }
+                    }
+                    return rec
+                } else {
+                    rec.release()
+                }
+            } catch (t: Throwable) {
+                lastException = t
+            }
+        }
+
+        throw lastException ?: IllegalStateException("Unable to initialize AudioRecord with any audio source")
     }
 
     private suspend fun preloadModels() {
@@ -335,7 +412,7 @@ class AudioRecognizer(
 
             var isRunningOutOfSpace = (floatSamples.remaining() < nRead.coerceAtLeast(1600)) && !expandSpaceIfAllowed()
 
-            val hasNotTalkedRecently = hasTalked && (numConsecutiveNonSpeech > 66) && useVAD
+            val hasNotTalkedRecently = hasTalked && (numConsecutiveNonSpeech > 28) && useVAD
             if (isRunningOutOfSpace || hasNotTalkedRecently) {
                 yield()
                 withContext(Dispatchers.Main) {
@@ -386,7 +463,7 @@ class AudioRecognizer(
 
             val rms = sqrt(samples.sumOf { (it.toFloat() / Short.MAX_VALUE.toFloat()).pow(2).toDouble() } / samples.size).toFloat()
 
-            if (startSoundPassed && ((rms > 0.01) || (numConsecutiveSpeech > 8))) {
+            if (startSoundPassed && ((rms > 0.004f) || (numConsecutiveSpeech > 3))) {
                 hasTalked = true
             }
 
@@ -446,39 +523,71 @@ class AudioRecognizer(
             .setSpeechDurationMs(150).setSilenceDurationMs(300).build()
     }
 
-    @Throws(SecurityException::class)
     private fun createRecorderAndJob(preferBluetoothMic: Boolean): MicrophoneDeviceState {
         isRecording = false
-        recorder?.stop()
+        try {
+            recorder?.stop()
+        } catch (_: Throwable) { }
 
         val bluetoothInfo = setCommunicationDevice(preferBluetoothMic)
 
         val task = {
-            recorder?.release()
+            try {
+                try {
+                    recorder?.release()
+                } catch (_: Throwable) { }
 
-            val recorder = createAudioRecorder()
+                val rec = createAudioRecorder()
 
-            recorder.startRecording()
-            this.recorder = recorder
+                if (rec.state != AudioRecord.STATE_INITIALIZED) {
+                    throw IllegalStateException("AudioRecord failed to initialize (state is UNINITIALIZED)")
+                }
 
-            isRecording = true
+                rec.startRecording()
+                this.recorder = rec
 
-            recorderJob = lifecycleScope.launch {
-                withContext(Dispatchers.Default) {
-                    if(useVAD) {
-                        createVad().use { vad ->
-                            recordingJob(recorder, vad)
+                isRecording = true
+
+                recorderJob = lifecycleScope.launch {
+                    withContext(Dispatchers.Default) {
+                        try {
+                            if(useVAD) {
+                                try {
+                                    createVad().use { vad ->
+                                        recordingJob(rec, vad)
+                                    }
+                                } catch (vadEx: Throwable) {
+                                    Log.w("AudioRecognizer", "VAD failed to initialize, running without VAD", vadEx)
+                                    recordingJob(rec, null)
+                                }
+                            } else {
+                                recordingJob(rec, null)
+                            }
+                        } catch (t: Throwable) {
+                            Log.e("AudioRecognizer", "recordingJob encountered error", t)
+                            withContext(Dispatchers.Main) {
+                                cancel()
+                            }
                         }
-                    } else {
-                        recordingJob(recorder, null)
                     }
+                }
+            } catch (t: Throwable) {
+                Log.e("AudioRecognizer", "Failed to start recording in task", t)
+                isRecording = false
+                if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    clearCommunicationDevice()
+                    requestPermission()
+                } else {
+                    listener.cancelled()
                 }
             }
         }
 
         if(recorderJob != null) {
             lifecycleScope.launch {
-                recorderJob?.cancelAndJoin()
+                try {
+                    recorderJob?.cancelAndJoin()
+                } catch (_: Throwable) { }
                 task()
             }
         } else {
@@ -492,7 +601,11 @@ class AudioRecognizer(
             deviceName = bluetoothInfo.second,
             bluetoothPreferredByUser = settings.recordingConfiguration.preferBluetoothMic,
             setBluetooth = {
-                listener.recordingStarted(createRecorderAndJob(it))
+                try {
+                    listener.recordingStarted(createRecorderAndJob(it))
+                } catch (t: Throwable) {
+                    Log.e("AudioRecognizer", "setBluetooth error", t)
+                }
             }
         )
     }
@@ -505,17 +618,30 @@ class AudioRecognizer(
             clearCommunicationDevice()
             requestPermission()
             return
+        } catch (e: Throwable) {
+            Log.e("AudioRecognizer", "Failed to createRecorderAndJob", e)
+            clearCommunicationDevice()
+            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                requestPermission()
+            } else {
+                listener.cancelled()
+            }
+            return
         }
 
-        focusAudio()
-
-        listener.recordingStarted(device)
+        try {
+            focusAudio()
+            listener.recordingStarted(device)
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "Error focusing audio or notifying recordingStarted", t)
+        }
 
         loadModelJob = lifecycleScope.launch {
             withContext(Dispatchers.Default) {
                 try {
                     preloadModels()
-                } catch(_: InvalidModelException) {
+                } catch(t: Throwable) {
+                    Log.e("AudioRecognizer", "Failed to preload models", t)
                     withContext(Dispatchers.Main) {
                         reset()
                         listener.modelLoadingFailed()
@@ -541,58 +667,95 @@ class AudioRecognizer(
     }
 
     private suspend fun runModel() {
-        loadModelJob?.let {
-            if (it.isActive) {
-                println("Model was not finished loading...")
-                it.join()
+        try {
+            loadModelJob?.let {
+                if (it.isActive) {
+                    println("Model was not finished loading...")
+                    it.join()
+                }
             }
-        }
 
-        val floatArray = floatSamples.array().sliceArray(0 until floatSamples.position())
+            val floatArray = floatSamples.array().sliceArray(0 until floatSamples.position())
 
-        yield()
-        val outputText = try {
-             modelRunner.run(
-                floatArray,
-                settings.modelRunConfiguration,
-                settings.decodingConfiguration,
-                runnerCallback
-            ).trim()
-        }catch(e: InferenceCancelledException) {
             yield()
-            return
-        }
-
-        val text = when {
-            isBlankResult(outputText) -> ""
-            else -> outputText
-        }
-
-        yield()
-        lifecycleScope.launch {
-            withContext(Dispatchers.Main) {
+            val outputText = try {
+                 modelRunner.run(
+                    floatArray,
+                    settings.modelRunConfiguration,
+                    settings.decodingConfiguration,
+                    runnerCallback
+                ).trim()
+            } catch(e: InferenceCancelledException) {
                 yield()
-                listener.finished(text)
+                return
+            } catch (t: Throwable) {
+                Log.e("AudioRecognizer", "modelRunner.run error", t)
+                yield()
+                withContext(Dispatchers.Main) {
+                    listener.cancelled()
+                }
+                return
+            }
+
+            val text = when {
+                isBlankResult(outputText) -> ""
+                else -> outputText
+            }
+
+            yield()
+            lifecycleScope.launch {
+                withContext(Dispatchers.Main) {
+                    try {
+                        yield()
+                        listener.finished(text)
+                    } catch (t: Throwable) {
+                        Log.e("AudioRecognizer", "listener.finished error", t)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "runModel general error", t)
+            withContext(Dispatchers.Main) {
+                listener.cancelled()
             }
         }
     }
 
     private fun onFinishRecording() {
-        recorderJob?.cancel()
+        try {
+            try {
+                recorderJob?.cancel()
+            } catch (_: Throwable) { }
 
-        if (!isRecording) {
-            throw IllegalStateException("Should not call onFinishRecording when not recording")
-        }
-
-        isRecording = false
-        recorder?.stop()
-
-        listener.processing()
-
-        modelJob = lifecycleScope.launch {
-            withContext(Dispatchers.Default) {
-                runModel()
+            if (!isRecording) {
+                return
             }
+
+            isRecording = false
+            try {
+                recorder?.stop()
+            } catch (e: Throwable) {
+                Log.w("AudioRecognizer", "Error stopping recorder", e)
+            }
+
+            listener.processing()
+
+            modelJob = lifecycleScope.launch {
+                withContext(Dispatchers.Default) {
+                    try {
+                        runModel()
+                    } catch (t: Throwable) {
+                        Log.e("AudioRecognizer", "runModel error", t)
+                        withContext(Dispatchers.Main) {
+                            listener.cancelled()
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e("AudioRecognizer", "onFinishRecording error", t)
+            reset()
+            listener.cancelled()
         }
     }
 }

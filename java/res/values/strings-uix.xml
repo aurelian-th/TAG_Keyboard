@@ -712,4 +712,64 @@ Default is %1$s</string>
     <string name="personal_dictionary_delete_additional_file">Delete extra dictionary file?</string>
     <!-- %1$s will be replaced with the custom dictionary name -->
     <string name="personal_dictionary_delete_additional_file_text">%1$s will be deleted</string>
+
+    <!-- Rambler & Emoji Kitchen Settings -->
+    <string name="rambler_settings_title">Rambler Speech Refinement</string>
+    <string name="rambler_settings_menu_subtitle">Pixel-style live streaming, filler removal &amp; diacritics</string>
+    <string name="rambler_settings_enabled">Enable Rambler refinement</string>
+    <string name="rambler_settings_enabled_subtitle">Clean up filler words, restore diacritics, and format spoken text</string>
+    <string name="rambler_settings_streaming_preview">Live streaming preview</string>
+    <string name="rambler_settings_streaming_preview_subtitle">Display transcribed words live under the cursor while speaking</string>
+    <string name="rambler_settings_disfluencies">Strip filler words</string>
+    <string name="rambler_settings_disfluencies_subtitle">Remove spoken hesitation like um, uh, nu, типа, ăă, etc.</string>
+    <string name="rambler_settings_diacritics">Restore Romanian diacritics</string>
+    <string name="rambler_settings_diacritics_subtitle">Automatically add ș, ț, ă, î, â to spoken Romanian</string>
+    <string name="rambler_settings_smart_punctuation">Smart punctuation &amp; capitalization</string>
+    <string name="rambler_settings_smart_punctuation_subtitle">Capitalize sentences and automatically format punctuation</string>
+    <string name="rambler_settings_ai_mode">AI SLM burst processing</string>
+    <string name="rambler_settings_ai_mode_subtitle">Use local language model for deep multilingual code-switching restoration</string>
+    <string name="rambler_thinking_title">Refining with Rambler…</string>
+    <string name="rambler_thinking_subtitle">Polishing speech and formatting</string>
+    <string name="emoji_kitchen_settings_title">Emoji Kitchen</string>
+    <string name="emoji_kitchen_settings_enabled">Emoji Kitchen stickers</string>
+    <string name="emoji_kitchen_settings_enabled_subtitle">Suggest mashup stickers when browsing or typing emojis</string>
+    <string name="emoji_kitchen_settings_only_supported_apps">Filter unsupported apps</string>
+    <string name="emoji_kitchen_settings_only_supported_apps_subtitle">Only show Emoji Kitchen in apps that support sticker/image insertion</string>
+    <string name="emoji_kitchen_settings_require_tap">Hide until emoji is pressed</string>
+    <string name="emoji_kitchen_settings_require_tap_subtitle">Only show stickers after tapping an emoji in the keyboard</string>
+    <string name="emoji_kitchen_settings_only_mashups">Show only mashed stickers</string>
+    <string name="emoji_kitchen_settings_only_mashups_subtitle">Hide related suggestions and only show the exact combination of typed emojis</string>
+
+    <!-- Voice & AI Model Downloader Strings -->
+    <string name="voice_input_download_models_title">Download Voice &amp; AI Models</string>
+    <string name="voice_input_download_models_subtitle">Multilingual Whisper speech models and Rambler SLM rewriting models</string>
+    <string name="voice_model_download_screen_title">Voice &amp; AI Models</string>
+    <string name="voice_model_whisper_header">Speech Recognition (Whisper ASR)</string>
+    <string name="voice_model_whisper_tip">Whisper offline speech-to-text models transcribe seamlessly across Romanian, Russian, English, and 90+ languages. Models are saved locally for 100% offline, private typing.</string>
+    <string name="voice_model_builtin_title">Built-in English Model (43.5 MB)</string>
+    <string name="voice_model_builtin_subtitle">Bundled directly in APK — always available offline</string>
+    <string name="voice_model_base_title">Whisper Base Multilingual (~142 MB)</string>
+    <string name="voice_model_base_subtitle">Recommended: High accuracy for Romanian, Russian, and English code-switching</string>
+    <string name="voice_model_tiny_title">Whisper Tiny Multilingual (~75 MB)</string>
+    <string name="voice_model_tiny_subtitle">Fast, compact multilingual model for quick voice dictation</string>
+    <string name="voice_model_small_title">Whisper Small Multilingual (~465 MB)</string>
+    <string name="voice_model_small_subtitle">Maximum accuracy multilingual model for noisy environments</string>
+    <string name="voice_model_explore_online">Explore FUTO Voice Models Catalog</string>
+    <string name="voice_model_explore_online_subtitle">Browse and download language-specific Whisper models directly</string>
+    <string name="rambler_slm_header">Rambler AI SLM Models (Qwen 2.5)</string>
+    <string name="rambler_slm_tip">Optional local Small Language Models (SLM) for deep multilingual code-switching restoration and punctuation polish. Voice typing works out of the box without Qwen!</string>
+    <string name="rambler_qwen_0_5b_title">Qwen 2.5 0.5B Instruct GGUF (~350 MB)</string>
+    <string name="rambler_qwen_0_5b_subtitle">Ultra-fast on-device burst post-processing for spoken text cleanup</string>
+    <string name="rambler_qwen_1_5b_title">Qwen 2.5 1.5B Instruct GGUF (~980 MB)</string>
+    <string name="rambler_qwen_1_5b_subtitle">Enhanced reasoning and code-switching grammar polish</string>
+    <string name="rambler_download_qwen_title">Download Qwen SLM Model</string>
+    <string name="rambler_download_qwen_subtitle">Get local GGUF models for Rambler AI burst rewriting</string>
+    <string name="model_download_started">Download started in background: %s</string>
+    <string name="model_download_installed">Installed</string>
+    <string name="model_download_active">Active</string>
+    <string name="model_download_button">Download</string>
+    <string name="model_download_activate">Activate</string>
+    <string name="model_download_activated">Activated: %s</string>
+    <string name="model_download_downloading">Downloading…</string>
+    <string name="model_download_import_found">Found in Downloads! Tap to import</string>
 </resources>

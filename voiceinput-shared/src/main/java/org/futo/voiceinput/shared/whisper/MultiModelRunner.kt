@@ -73,7 +73,7 @@ class MultiModelRunner(
                 prompt = glossary,
                 languages = allowedLanguages,
                 bailLanguages = bailLanguages,
-                decodingMode = DecodingMode.BeamSearch5,
+                decodingMode = DecodingMode.BeamSearch2,
                 suppressNonSpeechTokens = decodingConfiguration.suppressSymbols,
                 partialResultCallback = {
                     callback.partialResult(it)
@@ -91,7 +91,7 @@ class MultiModelRunner(
                 prompt = glossary,
                 languages = arrayOf(e.language),
                 bailLanguages = arrayOf(),
-                decodingMode = DecodingMode.BeamSearch5,
+                decodingMode = DecodingMode.BeamSearch2,
                 suppressNonSpeechTokens = decodingConfiguration.suppressSymbols,
                 partialResultCallback = {
                     callback.partialResult(it)

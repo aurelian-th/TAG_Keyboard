@@ -5061,22 +5061,28 @@ int whisper_full_with_state(
 
     bool encoding_required = true;
     TIME_START(detect_lang)
-    // auto-detect language if not specified
+    // auto-detect language if not specified or auto
     if (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language) {
-        std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
+        if (whisper_is_multilingual(ctx)) {
+            std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
 
-        const auto lang_id = whisper_lang_auto_detect_with_state(ctx, state, 0, params.n_threads, probs.data(), params.allowed_langs, params.allowed_langs_size);
-        encoding_required = false;
-        if (lang_id < 0) {
-            WHISPER_LOG_ERROR("%s: failed to auto-detect language\n", __func__);
-            return -3;
-        }
-        state->lang_id = lang_id;
-        params.language = whisper_lang_str(lang_id);
+            const auto lang_id = whisper_lang_auto_detect_with_state(ctx, state, 0, params.n_threads, probs.data(), params.allowed_langs, params.allowed_langs_size);
+            encoding_required = false;
+            if (lang_id < 0) {
+                state->lang_id = whisper_lang_id("en");
+                params.language = "en";
+            } else {
+                state->lang_id = lang_id;
+                params.language = whisper_lang_str(lang_id);
+            }
 
-        AKLOGI("%s: auto-detected language: %s (p = %f)\n", __func__, params.language, probs[whisper_lang_id(params.language)]);
-        if (params.detect_language) {
-            return 0;
+            AKLOGI("%s: auto-detected language: %s\n", __func__, params.language);
+            if (params.detect_language) {
+                return 0;
+            }
+        } else {
+            state->lang_id = whisper_lang_id("en");
+            params.language = "en";
         }
     }
     TIME_END(detect_lang)
@@ -5192,7 +5198,10 @@ int whisper_full_with_state(
 
     TIME_START(upuntil)
     if (whisper_is_multilingual(ctx)) {
-        const int lang_id = whisper_lang_id(params.language);
+        int lang_id = (params.language != nullptr && strlen(params.language) > 0) ? whisper_lang_id(params.language) : -1;
+        if (lang_id < 0) {
+            lang_id = (state->lang_id >= 0) ? state->lang_id : whisper_lang_id("en");
+        }
         state->lang_id = lang_id;
         prompt_init.push_back(whisper_token_lang(ctx, lang_id));
         if (params.translate) {

@@ -90,6 +90,7 @@ class RecognizerView(
 
     private val loadingCircleText = mutableStateOf("")
     private val partialDecodingText = mutableStateOf("")
+    private val liveTranscription = mutableStateOf("")
     private val currentViewState = mutableStateOf(CurrentView.LoadingCircle)
 
     private val currentDeviceState = mutableStateOf(MicrophoneDeviceState(
@@ -119,7 +120,8 @@ class RecognizerView(
                 InnerRecognize(
                     magnitude = magnitudeState,
                     state = statusState,
-                    device = currentDeviceState
+                    device = currentDeviceState,
+                    liveText = liveTranscription.value
                 )
             }
 
@@ -152,11 +154,19 @@ class RecognizerView(
     }
 
     fun finish() {
-        recognizer.finish()
+        try {
+            recognizer.finish()
+        } catch (t: Throwable) {
+            android.util.Log.e("RecognizerView", "finish error", t)
+        }
     }
 
     fun cancel() {
-        recognizer.cancel()
+        try {
+            recognizer.cancel()
+        } catch (t: Throwable) {
+            android.util.Log.e("RecognizerView", "cancel error", t)
+        }
     }
 
     private val audioRecognizerListener = object : AudioRecognizerListener {
@@ -179,7 +189,10 @@ class RecognizerView(
 
         override fun partialResult(result: String) {
             listener.partialResult(result)
-            if (settings.shouldShowInlinePartialResult && result.isNotBlank()) {
+            liveTranscription.value = result
+            if (settings.shouldShowInlinePartialResult) {
+                currentViewState.value = CurrentView.InnerRecognize
+            } else if (result.isNotBlank()) {
                 partialDecodingText.value = result
                 currentViewState.value = CurrentView.PartialDecodingResult
             }
@@ -250,10 +263,19 @@ class RecognizerView(
     )
 
     fun reset() {
-        recognizer.reset()
+        liveTranscription.value = ""
+        try {
+            recognizer.reset()
+        } catch (t: Throwable) {
+            android.util.Log.e("RecognizerView", "reset error", t)
+        }
     }
 
     fun start() {
-        recognizer.start()
+        try {
+            recognizer.start()
+        } catch (t: Throwable) {
+            android.util.Log.e("RecognizerView", "start error", t)
+        }
     }
 }

@@ -43,6 +43,7 @@ import org.futo.inputmethod.latin.common.InputPointers;
 import org.futo.inputmethod.latin.define.DebugFlags;
 import org.futo.inputmethod.latin.settings.Settings;
 import org.futo.inputmethod.latin.settings.SettingsValues;
+import org.futo.inputmethod.latin.uix.actions.ActionRegistry;
 import org.futo.inputmethod.latin.utils.ResourceUtils;
 import org.futo.inputmethod.v2keyboard.Direction;
 
@@ -1232,6 +1233,15 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             return;
         }
         final int code = key.getCode();
+        if (code == Constants.CODE_COMMA) {
+            cancelKeyTracking();
+            final int settingsActionCode = Constants.CODE_ACTION_0 + ActionRegistry.INSTANCE.actionStringIdToIdx("settings");
+            sListener.onPressKey(settingsActionCode, 0 /* repeatCont */, true /* isSinglePointer */);
+            sListener.onCodeInput(settingsActionCode, Constants.NOT_A_COORDINATE,
+                    Constants.NOT_A_COORDINATE, false /* isKeyRepeat */);
+            sListener.onReleaseKey(settingsActionCode, false /* withSliding */);
+            return;
+        }
         if (code == Constants.CODE_SPACE || code == Constants.CODE_LANGUAGE_SWITCH) {
             int spacebarMode = Settings.getInstance().getCurrent().mSpacebarHoldMode;
             if(spacebarMode == Settings.SPACEBAR_MODE_CURSOR) {

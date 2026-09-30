@@ -205,6 +205,10 @@ android {
         testApplicationId 'org.futo.inputmethod.latin.tests'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = false
+
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     bundle {
@@ -291,7 +295,6 @@ android {
             buildConfigField "boolean", "UPDATE_CHECKING", "true"
             buildConfigField "boolean", "UPDATE_CHECKING_NETWORK", "false"
             buildConfigField "String", "BRANCH", "\"${getBranch()}\""
-            getIsDefault().set(true)
 
             buildConfigField "String", "PAYMENT_PRICE", "FUTOPAY_PRICE"
         }
@@ -302,6 +305,7 @@ android {
             buildConfigField "boolean", "UPDATE_CHECKING", "true"
             buildConfigField "boolean", "UPDATE_CHECKING_NETWORK", "false"
             buildConfigField "String", "BRANCH", "\"${getBranch()}\""
+            getIsDefault().set(true)
 
             buildConfigField "String", "PAYMENT_PRICE", "FUTOPAY_PRICE"
         }
@@ -368,7 +372,7 @@ android {
     }
 
     aaptOptions {
-        noCompress 'dict'
+        noCompress 'dict', 'not.tflite', 'bin', 'db', 'gz', 'pte'
     }
 
     packagingOptions {

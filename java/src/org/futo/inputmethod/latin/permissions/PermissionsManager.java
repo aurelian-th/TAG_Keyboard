@@ -65,6 +65,7 @@ public class PermissionsManager {
         List<String> deniedPermissions = PermissionsUtil.getDeniedPermissions(
                 mContext, permissionsToRequest);
         if (deniedPermissions.isEmpty()) {
+            callback.onRequestPermissionsResult(true);
             return;
         }
         // otherwise request the permissions.

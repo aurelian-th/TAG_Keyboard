@@ -14,6 +14,12 @@ import org.futo.inputmethod.latin.uix.CAN_EXPAND_SPACE
 import org.futo.inputmethod.latin.uix.DISALLOW_SYMBOLS
 import org.futo.inputmethod.latin.uix.ENABLE_SOUND
 import org.futo.inputmethod.latin.uix.PREFER_BLUETOOTH
+import org.futo.inputmethod.latin.uix.RAMBLER_AI_MODE
+import org.futo.inputmethod.latin.uix.RAMBLER_DIACRITICS
+import org.futo.inputmethod.latin.uix.RAMBLER_DISFLUENCIES
+import org.futo.inputmethod.latin.uix.RAMBLER_ENABLED
+import org.futo.inputmethod.latin.uix.RAMBLER_SMART_PUNCTUATION
+import org.futo.inputmethod.latin.uix.RAMBLER_STREAMING_PREVIEW
 import org.futo.inputmethod.latin.uix.SYSTEM_VOICE_INPUT_PACKAGE
 import org.futo.inputmethod.latin.uix.USE_PERSONAL_DICT
 import org.futo.inputmethod.latin.uix.USE_SYSTEM_VOICE_INPUT
@@ -173,11 +179,70 @@ val VoiceInputMenu = UserSettingsMenu(
         ).copy(visibilityCheck = visibilityCheckNotSystemVoiceInput),
 
         userSettingNavigationItem(
+            title = R.string.rambler_settings_title,
+            subtitle = R.string.rambler_settings_menu_subtitle,
+            style = NavigationItemStyle.Misc,
+            navigateTo = "rambler",
+            icon = R.drawable.mic_fill
+        ).copy(visibilityCheck = visibilityCheckNotSystemVoiceInput),
+
+        userSettingNavigationItem(
+            title = R.string.voice_input_download_models_title,
+            subtitle = R.string.voice_input_download_models_subtitle,
+            style = NavigationItemStyle.Misc,
+            navigateTo = "voiceModelsDownload",
+            icon = R.drawable.arrow_down
+        ).copy(visibilityCheck = visibilityCheckNotSystemVoiceInput),
+
+        userSettingNavigationItem(
             title = R.string.voice_input_settings_change_models,
             subtitle = R.string.voice_input_settings_change_models_subtitle,
             style = NavigationItemStyle.Misc,
             navigateTo = "languages"
         ).copy(visibilityCheck = visibilityCheckNotSystemVoiceInput),
-        //}
+    )
+)
+
+val RamblerSettingsMenu = UserSettingsMenu(
+    title = R.string.rambler_settings_title,
+    navPath = "rambler", registerNavPath = true,
+    settings = listOf(
+        userSettingToggleDataStore(
+            title = R.string.rambler_settings_enabled,
+            subtitle = R.string.rambler_settings_enabled_subtitle,
+            setting = RAMBLER_ENABLED
+        ),
+        userSettingToggleDataStore(
+            title = R.string.rambler_settings_streaming_preview,
+            subtitle = R.string.rambler_settings_streaming_preview_subtitle,
+            setting = RAMBLER_STREAMING_PREVIEW
+        ),
+        userSettingToggleDataStore(
+            title = R.string.rambler_settings_disfluencies,
+            subtitle = R.string.rambler_settings_disfluencies_subtitle,
+            setting = RAMBLER_DISFLUENCIES
+        ),
+        userSettingToggleDataStore(
+            title = R.string.rambler_settings_diacritics,
+            subtitle = R.string.rambler_settings_diacritics_subtitle,
+            setting = RAMBLER_DIACRITICS
+        ),
+        userSettingToggleDataStore(
+            title = R.string.rambler_settings_smart_punctuation,
+            subtitle = R.string.rambler_settings_smart_punctuation_subtitle,
+            setting = RAMBLER_SMART_PUNCTUATION
+        ),
+        userSettingToggleDataStore(
+            title = R.string.rambler_settings_ai_mode,
+            subtitle = R.string.rambler_settings_ai_mode_subtitle,
+            setting = RAMBLER_AI_MODE
+        ),
+        userSettingNavigationItem(
+            title = R.string.rambler_download_qwen_title,
+            subtitle = R.string.rambler_download_qwen_subtitle,
+            style = NavigationItemStyle.Misc,
+            navigateTo = "voiceModelsDownload",
+            icon = R.drawable.cpu
+        )
     )
 )

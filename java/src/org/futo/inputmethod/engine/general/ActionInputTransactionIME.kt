@@ -31,10 +31,17 @@ class ActionInputTransactionIME(val helper: IMEHelper) : IMEInterface, ActionInp
         helper.getCurrentInputConnection()
     }
 
+    private var currentSelStart: Int = -1
+    private var currentSelEnd: Int = -1
+    private var committedLength: Int = 0
+
     override fun onCreate() {}
     override fun onDestroy() {}
     override fun onDeviceUnlocked() {}
-    override fun onStartInput() {}
+    override fun onStartInput() {
+        currentSelStart = helper.getCurrentEditorInfo()?.initialSelStart ?: -1
+        currentSelEnd = helper.getCurrentEditorInfo()?.initialSelEnd ?: -1
+    }
     override fun onOrientationChanged() {}
     override fun onFinishInput() {}
     override fun onUpdateSelection(
@@ -45,6 +52,8 @@ class ActionInputTransactionIME(val helper: IMEHelper) : IMEInterface, ActionInp
         composingSpanStart: Int,
         composingSpanEnd: Int
     ) {
+        currentSelStart = newSelStart
+        currentSelEnd = newSelEnd
         if(ic is InputConnectionInternalComposingWrapper) {
             if(!ic.mightBeBelated(oldSelStart, oldSelEnd, newSelStart, newSelEnd)) {
                 ic.cursorUpdated(oldSelStart, oldSelEnd, newSelStart, newSelEnd)
@@ -71,10 +80,12 @@ class ActionInputTransactionIME(val helper: IMEHelper) : IMEInterface, ActionInp
     override fun requestSuggestionRefresh() {}
     override fun onLayoutUpdated(layout: KeyboardLayoutSetV2) { }
 
-    override val textContext: TextContext = TextContext(
-        beforeCursor = ic?.getTextBeforeCursor(Constants.VOICE_INPUT_CONTEXT_SIZE, 0),
-        afterCursor = ic?.getTextAfterCursor(Constants.VOICE_INPUT_CONTEXT_SIZE, 0)
-    )
+    override val textContext: TextContext
+        get() = TextContext(
+            beforeCursor = ic?.getTextBeforeCursor(Constants.VOICE_INPUT_CONTEXT_SIZE, 0),
+            afterCursor = ic?.getTextAfterCursor(Constants.VOICE_INPUT_CONTEXT_SIZE, 0),
+            selectedText = ic?.getSelectedText(0)
+        )
 
     private var isFinished = false
     private var partialText = ""
@@ -100,6 +111,84 @@ class ActionInputTransactionIME(val helper: IMEHelper) : IMEInterface, ActionInp
         )
         helper.endInputTransaction(this)
         (ic as? InputConnectionInternalComposingWrapper)?.send()
+    }
+
+    override fun commitAndSelect(text: String) {
+        if (isFinished) return
+        helper.requestCursorUpdate()
+        partialText = ""
+        committedLength = text.length
+
+        // Capture starting position before commit
+        val start = if (currentSelStart >= 0) currentSelStart else (helper.getCurrentEditorInfo()?.initialSelStart ?: -1)
+        ic?.commitText(text, 1)
+
+        // Select the newly committed text range so user sees what was just typed
+        if (start >= 0 && text.isNotEmpty()) {
+            ic?.setSelection(start, start + text.length)
+        } else if (text.isNotEmpty()) {
+            helper.requestCursorUpdate()
+            val end = if (currentSelEnd >= 0) currentSelEnd else (start + text.length)
+            if (end >= text.length) {
+                ic?.setSelection(end - text.length, end)
+            }
+        }
+        (ic as? InputConnectionInternalComposingWrapper)?.send()
+    }
+
+    override fun replaceSelection(text: String) {
+        if (isFinished) return
+        helper.requestCursorUpdate()
+        isFinished = true
+        
+        // Committing text replaces whatever is selected in standard Android InputConnection
+        ic?.commitText(text, 1)
+        helper.endInputTransaction(this)
+        (ic as? InputConnectionInternalComposingWrapper)?.send()
+    }
+
+    override fun replaceInContext(target: String, replacement: String): Boolean {
+        if (isFinished) return false
+        helper.requestCursorUpdate()
+
+        // Clear any active composing text before modifying surrounding text
+        if (partialText.isNotEmpty()) {
+            ic?.finishComposingText()
+            partialText = ""
+        }
+
+        // 1. If text is currently selected, replace the selection
+        val selected = ic?.getSelectedText(0)?.toString()
+        if (!selected.isNullOrEmpty()) {
+            if (target.isEmpty() || selected.contains(target, ignoreCase = true) || target.contains(selected, ignoreCase = true)) {
+                isFinished = true
+                ic?.commitText(replacement, 1)
+                helper.endInputTransaction(this)
+                (ic as? InputConnectionInternalComposingWrapper)?.send()
+                return true
+            }
+        }
+
+        // 2. Otherwise search backwards in beforeCursor
+        val before = ic?.getTextBeforeCursor(Constants.VOICE_INPUT_CONTEXT_SIZE, 0)?.toString()
+        if (!before.isNullOrEmpty() && target.isNotEmpty()) {
+            val escaped = java.util.regex.Pattern.quote(target)
+            val regex = Regex("\\b$escaped\\b", RegexOption.IGNORE_CASE)
+            val match = regex.findAll(before).lastOrNull()
+            val startIdx = match?.range?.first ?: before.lastIndexOf(target, ignoreCase = true)
+            val matchLen = if (match != null) (match.range.last - match.range.first + 1) else target.length
+
+            if (startIdx >= 0) {
+                isFinished = true
+                val newBefore = before.substring(0, startIdx) + replacement + before.substring(startIdx + matchLen)
+                ic?.deleteSurroundingText(before.length, 0)
+                ic?.commitText(newBefore, 1)
+                helper.endInputTransaction(this)
+                (ic as? InputConnectionInternalComposingWrapper)?.send()
+                return true
+            }
+        }
+        return false
     }
 
     override fun cancel() {

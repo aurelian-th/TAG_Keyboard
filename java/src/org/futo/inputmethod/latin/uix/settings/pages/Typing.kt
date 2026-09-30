@@ -871,6 +871,13 @@ val TypingSettingsMenu = UserSettingsMenu(
                     tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f))
             }
         ),
+        userSettingNavigationItem(
+            title = R.string.emoji_kitchen_settings_title,
+            subtitle = R.string.emoji_kitchen_settings_enabled_subtitle,
+            style = NavigationItemStyle.Misc,
+            navigateTo = "actions/emoji",
+            icon = R.drawable.smile
+        ),
         userSettingToggleSharedPrefs(
             title = R.string.auto_cap,
             subtitle = R.string.auto_cap_summary,
