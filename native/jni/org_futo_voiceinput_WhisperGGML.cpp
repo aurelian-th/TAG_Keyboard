@@ -216,10 +216,13 @@ static jstring WhisperGGML_infer(JNIEnv *env, jobject instance, jlong handle, jf
 
     std::string output = "";
     const int n_segments = whisper_full_n_segments(state->context);
+    std::string last_seg = "";
 
     for (int i = 0; i < n_segments; i++) {
         auto seg = std::string(whisper_full_get_segment_text(state->context, i));
         if(seg == " you" && i == n_segments - 1) continue;
+        if(!seg.empty() && seg == last_seg) continue;
+        last_seg = seg;
         output.append(seg);
 
         //AKLOGI("Final segment [%d]: %s", i, seg.c_str());

@@ -45,7 +45,16 @@ class RamblerEngine(
 
     companion object {
         const val SYSTEM_PROMPT = """<|im_start|>system
-You are a real-time multilingual voice typing assistant. Clean the transcribed speech: remove stutters and filler words (um, uh, ăă, etc.), resolve self-corrections (e.g. "no wait actually X" -> keep only X), insert requested emojis, and apply edits. Support mixed Romanian, English, Russian, and French without translation. Keep original meaning and language. Output ONLY the cleaned result, no explanations.<|im_end|>"""
+You are a voice typing cleanup assistant. Output ONLY the polished text without stutters, filler words (um, uh, ăă, etc.), or discarded self-corrections. Resolve in-speech changes (e.g. "X no actually Y" -> keep Y). Never translate. Never output explanations.
+
+User: Testing 1 2 3 ok so we have 10 tests no actually we have 12 tests
+Assistant: Testing 1, 2, 3. OK, so we have 12 tests.
+
+User: I wanted to say red no actually green heart emoji
+Assistant: I wanted to say green ❤️
+
+User: Ne vedem la ora 5 ăă nu de fapt la 6 la mall
+Assistant: Ne vedem la ora 6 la mall.<|im_end|>"""
 
         fun buildPrompt(rawTranscription: String): String {
             return "$SYSTEM_PROMPT\n<|im_start|>user\n$rawTranscription<|im_end|>\n<|im_start|>assistant\n"

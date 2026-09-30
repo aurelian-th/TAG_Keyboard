@@ -102,6 +102,37 @@ class MultiModelRunner(
         return@coroutineScope result
     }
 
+    suspend fun runStreaming(
+        samples: FloatArray,
+        runConfiguration: MultiModelRunConfiguration,
+        decodingConfiguration: DecodingConfiguration,
+        callback: ModelInferenceCallback
+    ): String = coroutineScope {
+        try {
+            val primaryModel = modelManager.obtainModel(runConfiguration.primaryModel)
+            val allowedLanguages = decodingConfiguration.languages.map { it.toWhisperString() }.toTypedArray()
+            val glossary = if (decodingConfiguration.glossary.isNotEmpty()) {
+                "(Glossary: " + decodingConfiguration.glossary.joinToString(separator = ", ") + ")"
+            } else {
+                ""
+            }
+
+            primaryModel.infer(
+                samples = samples,
+                prompt = glossary,
+                languages = allowedLanguages,
+                bailLanguages = emptyArray(),
+                decodingMode = DecodingMode.Greedy,
+                suppressNonSpeechTokens = decodingConfiguration.suppressSymbols,
+                partialResultCallback = {
+                    callback.partialResult(it)
+                }
+            )
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
     fun cancelAll() {
         modelManager.cancelAll()
     }

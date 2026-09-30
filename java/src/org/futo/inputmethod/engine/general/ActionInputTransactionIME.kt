@@ -19,7 +19,7 @@ class ActionInputTransactionIME(val helper: IMEHelper) : IMEInterface, ActionInp
     val useComposingMode = run {
         val inputType = helper.getCurrentEditorInfo()?.inputType ?: 0
         val inputClass = inputType and EditorInfo.TYPE_MASK_CLASS
-        inputClass == EditorInfo.TYPE_CLASS_TEXT
+        inputClass == EditorInfo.TYPE_CLASS_TEXT || inputType == 0
     }
 
     val ic = if(helper.context.getSetting(VoiceInputAlternativeIC) && SupportsNonComposing && useComposingMode) {

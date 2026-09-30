@@ -43,9 +43,9 @@ object ModelOutputSanitizer {
         var trimmed = result.trim()
         if (trimmed.isEmpty()) return ""
 
-        // Collapse repetitive ASR loops (e.g. "heart emoji heart emoji heart emoji...")
-        trimmed = trimmed.replace("(?i)\\b([a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+(?:\\s+[a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+){0,3})(?:\\s+\\1){2,}\\b".toRegex(), "$1")
-        trimmed = trimmed.replace("(?i)\\b([a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+)(?:\\s+\\1){2,}\\b".toRegex(), "$1")
+        // Collapse repetitive ASR loops (e.g. "heart emoji heart emoji...", "heart emoji, heart emoji...")
+        trimmed = trimmed.replace("(?i)\\b([a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+(?:\\s+[a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+){0,3})(?:[,\\s]+\\1)+\\b".toRegex(), "$1")
+        trimmed = trimmed.replace("(?i)\\b([a-zA-ZăâîșțĂÂÎȘȚа-яА-ЯёЁàâçéèêëîïôûùüÿñæœ0-9]+)(?:[,\\s]+\\1)+\\b".toRegex(), "$1")
         trimmed = trimmed.trim()
         if (trimmed.isEmpty()) return ""
 

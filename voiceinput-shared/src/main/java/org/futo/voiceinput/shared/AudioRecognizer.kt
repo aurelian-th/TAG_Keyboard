@@ -26,6 +26,8 @@ import com.konovalov.vad.models.VadModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
@@ -111,6 +113,7 @@ class AudioRecognizer(
     private var recorderJob: Job? = null
     private var modelJob: Job? = null
     private var loadModelJob: Job? = null
+    private var liveStreamingJob: Job? = null
 
     private var focusRequest: AudioFocusRequest? = null
 
@@ -230,6 +233,9 @@ class AudioRecognizer(
 
         try {
             modelJob?.cancel()
+        } catch (_: Throwable) { }
+        try {
+            liveStreamingJob?.cancel()
         } catch (_: Throwable) { }
         isRecording = false
 
@@ -649,6 +655,40 @@ class AudioRecognizer(
                 }
             }
         }
+
+        // Live real-time streaming recognition loop:
+        // As audio arrives in floatSamples, periodically infer snapshots so words appear
+        // immediately on the user's screen in real time while they speak.
+        liveStreamingJob = lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                try {
+                    loadModelJob?.join()
+                } catch (_: Throwable) { }
+
+                delay(400)
+                var lastInferredLen = 0
+
+                while (isRecording && isActive) {
+                    try {
+                        val currentLen = floatSamples.position()
+                        if (currentLen >= 8000 && currentLen > lastInferredLen + 3200 && isRecording) {
+                            lastInferredLen = currentLen
+                            val snapshot = floatSamples.array().sliceArray(0 until currentLen)
+                            val liveText = modelRunner.runStreaming(
+                                snapshot,
+                                settings.modelRunConfiguration,
+                                settings.decodingConfiguration,
+                                runnerCallback
+                            )
+                            if (liveText.isNotBlank() && isRecording) {
+                                runnerCallback.partialResult(liveText)
+                            }
+                        }
+                    } catch (_: Throwable) { }
+                    delay(350)
+                }
+            }
+        }
     }
 
     private val runnerCallback: ModelInferenceCallback = object : ModelInferenceCallback {
@@ -725,6 +765,12 @@ class AudioRecognizer(
         try {
             try {
                 recorderJob?.cancel()
+            } catch (_: Throwable) { }
+            try {
+                liveStreamingJob?.cancel()
+            } catch (_: Throwable) { }
+            try {
+                modelRunner.cancelAll()
             } catch (_: Throwable) { }
 
             if (!isRecording) {
